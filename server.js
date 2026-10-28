@@ -28,6 +28,11 @@ app.post("/api/run-workflow", async (req, res) => {
   }
 });
 
+app.get("/api/memory", (req, res) => {
+  const { getMemory } = require("./src/memory");
+  res.json({ memory: getMemory() });
+});
+
 app.use(express.static(path.join(__dirname)));
 
 app.get("*", (req, res) => {

@@ -1,61 +1,67 @@
-const { askGemini } = require("./ai");
-
-const agentDefinitions = [
-  {
-    name: "CEO",
-    system: "Sən CEO-san. Strateji planı, biznes məqsədini və dəyər təklifini qısa və praktik şəkildə yaz."
-  },
-  {
-    name: "CODER",
-    system: "Sən Coder-san. Texniki implementasiya planını, file strukturu və kod dizaynını yaz."
-  },
-  {
-    name: "DB",
-    system: "Sən DB architect-sən. SQL schema, cədvəllər və data modelini yaz."
-  },
-  {
-    name: "DEVOPS",
-    system: "Sən DevOps-san. Dockerfile, docker-compose və deployment planını yaz."
-  },
-  {
-    name: "QA",
-    system: "Sən QA-san. Test planı, risk analizi və yoxlama checklistini yaz."
-  },
-  {
-    name: "DEPLOY",
-    system: "Sən Deploy agent-sən. Release planını və final yayım sırasını yaz."
-  }
-];
+const { addMemory, getMemory } = require("./memory");
+const { evaluateWorkflow } = require("./evaluator");
+const { retryWithImprovement } = require("./retry-loop");
+const { rollbackState } = require("./rollback");
+const { writePatch } = require("./repo-patch");
+const {
+  ceoAgent,
+  coderAgent,
+  dbAgent,
+  devopsAgent,
+  qaAgent,
+  deployAgent
+} = require("./agents");
 
 async function runMultiAgentWorkflow(prompt) {
   const logs = [];
 
-  for (const agent of agentDefinitions) {
-    const fullPrompt = `
-      ${agent.system}
+  const tasks = [
+    ceoAgent,
+    coderAgent,
+    dbAgent,
+    devopsAgent,
+    qaAgent,
+    deployAgent
+  ];
 
-      Task:
-      "${prompt}"
-
-      Qayıdışda:
-      - qısa
-      - praktik
-      - konkret
-      - işə yarayan plan
-    `;
-
-    const answer = await askGemini(fullPrompt);
-
+  for (const task of tasks) {
+    const result = await task(prompt);
     logs.push({
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      agent: agent.name,
-      message: answer
+      agent: result.agent,
+      message: result.message
     });
+
+    addMemory({
+      agent: result.agent,
+      prompt,
+      message: result.message
+    });
+  }
+
+  const score = evaluateWorkflow(logs);
+
+  if (score < 70) {
+    const improved = await retryWithImprovement(prompt, logs);
+    const patchPath = "generated/fix.txt";
+    writePatch(patchPath, improved);
+
+    return {
+      status: "retry-needed",
+      score,
+      logs,
+      improved,
+      rollback: rollbackState({ prompt }),
+      patch: patchPath,
+      memory: getMemory()
+    };
   }
 
   return {
     status: "completed",
-    logs
+    score,
+    logs,
+    memory: getMemory()
   };
 }
 

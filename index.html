@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Al Business Multi-Agent</title>
+    <title>Al Business Self-Healing Multi-Agent</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -25,6 +25,11 @@
         padding: 16px;
         font-size: 16px;
       }
+      .action-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 16px;
+      }
       button {
         padding: 12px 20px;
         border: none;
@@ -33,6 +38,10 @@
         color: #07141d;
         font-weight: 700;
         cursor: pointer;
+      }
+      button.secondary {
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: white;
       }
       .log-panel {
         margin-top: 24px;
@@ -49,14 +58,16 @@
   </head>
   <body>
     <div class="container">
-      <h1>Al Business Multi-Agent Workflow</h1>
+      <h1>Al Business Self-Healing Multi-Agent</h1>
 
       <textarea id="taskInput">
 Alibaba tarzı e-ticaret platformu qur: FastAPI backend, məhsul və istifadəçi cədvəlləri, Dockerfile, docker-compose.yml və deploy planı.
       </textarea>
 
-      <br /><br />
-      <button id="runBtn">Agentləri Başlat</button>
+      <div class="action-row">
+        <button id="runBtn">Agentləri Başlat</button>
+        <button id="selfHealBtn" class="secondary">Özünü Bərpa Et</button>
+      </div>
 
       <div id="logPanel" class="log-panel"></div>
     </div>
