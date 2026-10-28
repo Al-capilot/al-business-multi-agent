@@ -1,67 +1,53 @@
-const { addMemory, getMemory } = require("./memory");
-const { evaluateWorkflow } = require("./evaluator");
-const { retryWithImprovement } = require("./retry-loop");
-const { rollbackState } = require("./rollback");
-const { writePatch } = require("./repo-patch");
-const {
-  ceoAgent,
-  coderAgent,
-  dbAgent,
-  devopsAgent,
-  qaAgent,
-  deployAgent
-} = require("./agents");
+const { askGemini } = require("./ai");
+const { safeAgentWrite } = require("./agent-safeguard");
+
+const agentDefinitions = [
+  {
+    name: "CEO",
+    system: "Sən CEO-san. Strateji planı və biznes hədəfini yaz."
+  },
+  {
+    name: "CODER",
+    system: "Sən Coder-san. Kod yaz. Qəbul etmək üçün validation library-dən keçməlidir."
+  }
+];
 
 async function runMultiAgentWorkflow(prompt) {
   const logs = [];
 
-  const tasks = [
-    ceoAgent,
-    coderAgent,
-    dbAgent,
-    devopsAgent,
-    qaAgent,
-    deployAgent
-  ];
+  for (const agent of agentDefinitions) {
+    const fullPrompt = `
+      ${agent.system}
 
-  for (const task of tasks) {
-    const result = await task(prompt);
+      Task:
+      "${prompt}"
+
+      Yalnız JavaScript kodu yaz.
+      Kod yazmadan əvvəl validation library-dən keçməlidir.
+    `;
+
+    const answer = await askGemini(fullPrompt);
+    const safetyCheck = safeAgentWrite(answer, { agent: agent.name, prompt });
+
+    if (!safetyCheck.accepted) {
+      logs.push({
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        agent: agent.name,
+        message: `Rejected by validation library: ${safetyCheck.reason}`
+      });
+      continue;
+    }
+
     logs.push({
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      agent: result.agent,
-      message: result.message
+      agent: agent.name,
+      message: answer
     });
-
-    addMemory({
-      agent: result.agent,
-      prompt,
-      message: result.message
-    });
-  }
-
-  const score = evaluateWorkflow(logs);
-
-  if (score < 70) {
-    const improved = await retryWithImprovement(prompt, logs);
-    const patchPath = "generated/fix.txt";
-    writePatch(patchPath, improved);
-
-    return {
-      status: "retry-needed",
-      score,
-      logs,
-      improved,
-      rollback: rollbackState({ prompt }),
-      patch: patchPath,
-      memory: getMemory()
-    };
   }
 
   return {
     status: "completed",
-    score,
-    logs,
-    memory: getMemory()
+    logs
   };
 }
 
