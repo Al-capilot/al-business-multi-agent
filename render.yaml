@@ -1,8 +1,9 @@
 services:
   - type: web
     name: al-business-multi-agent
-    env: node
+    runtime: node
     plan: free
+    healthCheckPath: /api/health
     buildCommand: npm install
     startCommand: npm start
     envVars:
