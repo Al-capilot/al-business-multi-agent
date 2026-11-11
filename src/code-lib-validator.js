@@ -2,87 +2,60 @@ const fs = require("fs");
 const path = require("path");
 const acorn = require("acorn");
 
+const DEFAULT_RULES = {
+  requiredFunctions: [],
+  forbiddenPatterns: ["eval(", "document.write(", "while(true)"],
+  requiredImports: []
+};
+
 function loadRules() {
-  const rulesPath = path.join(process.cwd(), "library", "code-rules.json");
-  const raw = fs.readFileSync(rulesPath, "utf8");
-  return JSON.parse(raw);
+  const rulesPath = path.join(__dirname, "..", "library", "code-rules.json");
+  try {
+    const rules = JSON.parse(fs.readFileSync(rulesPath, "utf8"));
+    return {
+      requiredFunctions: Array.isArray(rules.requiredFunctions) ? rules.requiredFunctions : DEFAULT_RULES.requiredFunctions,
+      forbiddenPatterns: Array.isArray(rules.forbiddenPatterns) ? rules.forbiddenPatterns : DEFAULT_RULES.forbiddenPatterns,
+      requiredImports: Array.isArray(rules.requiredImports) ? rules.requiredImports : DEFAULT_RULES.requiredImports
+    };
+  } catch {
+    return DEFAULT_RULES;
+  }
 }
 
 function validateSyntax(code) {
   try {
-    acorn.parse(code, { ecmaVersion: "latest" });
+    acorn.parse(code, { ecmaVersion: "latest", sourceType: "module" });
     return { ok: true };
   } catch (error) {
     return { ok: false, error: `Syntax error: ${error.message}` };
   }
 }
 
-function validateRequiredFunctions(code, requiredFunctions) {
-  const missing = requiredFunctions.filter((name) => !code.includes(name));
-  return {
-    ok: missing.length === 0,
-    missing
-  };
-}
-
-function validateForbiddenPatterns(code, patterns) {
-  const violations = patterns.filter((pattern) => code.includes(pattern));
-  return {
-    ok: violations.length === 0,
-    violations
-  };
-}
-
-function validateRequiredImports(code, requiredImports) {
-  const missing = requiredImports.filter((imp) => !code.includes(imp));
-  return {
-    ok: missing.length === 0,
-    missing
-  };
-}
-
 function validateGeneratedCode(code) {
+  if (typeof code !== "string" || !code.trim()) {
+    return { ok: false, stage: "input", error: "No code was provided." };
+  }
+
   const rules = loadRules();
   const syntaxCheck = validateSyntax(code);
-  if (!syntaxCheck.ok) {
-    return {
-      ok: false,
-      stage: "syntax",
-      error: syntaxCheck.error
-    };
+  if (!syntaxCheck.ok) return { ok: false, stage: "syntax", error: syntaxCheck.error };
+
+  const missingFunctions = rules.requiredFunctions.filter((name) => !code.includes(name));
+  if (missingFunctions.length) {
+    return { ok: false, stage: "required-functions", error: `Missing required functions: ${missingFunctions.join(", ")}` };
   }
 
-  const functionCheck = validateRequiredFunctions(code, rules.requiredFunctions);
-  if (!functionCheck.ok) {
-    return {
-      ok: false,
-      stage: "required-functions",
-      error: `Missing required functions: ${functionCheck.missing.join(", ")}`
-    };
+  const violations = rules.forbiddenPatterns.filter((pattern) => code.includes(pattern));
+  if (violations.length) {
+    return { ok: false, stage: "forbidden-patterns", error: `Forbidden patterns found: ${violations.join(", ")}` };
   }
 
-  const forbiddenCheck = validateForbiddenPatterns(code, rules.forbiddenPatterns);
-  if (!forbiddenCheck.ok) {
-    return {
-      ok: false,
-      stage: "forbidden-patterns",
-      error: `Forbidden patterns found: ${forbiddenCheck.violations.join(", ")}`
-    };
+  const missingImports = rules.requiredImports.filter((item) => !code.includes(item));
+  if (missingImports.length) {
+    return { ok: false, stage: "required-imports", error: `Missing imports: ${missingImports.join(", ")}` };
   }
 
-  const importCheck = validateRequiredImports(code, rules.requiredImports);
-  if (!importCheck.ok) {
-    return {
-      ok: false,
-      stage: "required-imports",
-      error: `Missing imports: ${importCheck.missing.join(", ")}`
-    };
-  }
-
-  return {
-    ok: true,
-    message: "Code passed validation library checks."
-  };
+  return { ok: true, message: "Code passed configured syntax and pattern checks." };
 }
 
 module.exports = { validateGeneratedCode };

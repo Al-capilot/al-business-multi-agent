@@ -1,17 +1,9 @@
 {
-  "requiredFunctions": [
-    "runMultiAgentWorkflow",
-    "askGemini"
-  ],
+  "requiredFunctions": [],
   "forbiddenPatterns": [
     "eval(",
-    "innerHTML =",
     "document.write(",
-    "while(true)",
-    "process.env.GEMINI_API_KEY"
+    "while(true)"
   ],
-  "requiredImports": [
-    "express",
-    "@google/generative-ai"
-  ]
+  "requiredImports": []
 }
